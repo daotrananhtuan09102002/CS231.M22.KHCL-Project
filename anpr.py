@@ -5,9 +5,10 @@ import numpy as np
 import imutils
 import cv2
 
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 class PyImageSearchANPR:
-    def __init__(self, minAR=4, maxAR=5, debug=False):
+    def __init__(self, minAR=1.2, maxAR=2, debug=False):
         # store the minimum and maximum rectangular aspect ratio
         # values along with whether or not we are in debug mode
         self.minAR = minAR
@@ -132,7 +133,6 @@ class PyImageSearchANPR:
         # empty
         if lp is not None:
             # OCR the license plate
-            pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
             options = self.build_tesseract_options(psm=psm)
             lpText = pytesseract.image_to_string(lp, config=options)
             self.debug_imshow("License Plate", lp)

@@ -1,22 +1,3 @@
-import cv2
-import pytesseract
-from PIL import Image
-# img_cv = cv2.imread(r'license_plate/001.jpg')
-# cv2.imshow('image', img_cv)
-#
-#
-# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-# # By default OpenCV stores images in BGR format and since pytesseract assumes RGB format,
-# # we need to convert from BGR to RGB format/mode:
-# img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
-# print(pytesseract.image_to_string(img_rgb))
-#
-# # cv2.imshow('image1', img_rgb)
-# # img_rgb = Image.frombytes('RGB', img_cv.shape[:2], img_cv, 'raw', 'BGR', 0, 0)
-# # img_rgb.show()
-# # print(pytesseract.image_to_string(img_rgb))
-# cv2.waitKey(0)
-
 # import the necessary packages
 from anpr import PyImageSearchANPR
 from imutils import paths
@@ -46,10 +27,11 @@ args = vars(ap.parse_args())
 # initialize our ANPR class
 anpr = PyImageSearchANPR(debug=args["debug"] > 0)
 # grab all image paths in the input directory
-imagePaths = sorted(list(paths.list_images(args["input"])))
-print(imagePaths)
+imagePaths = sorted(list(paths.list_images(args["input"])))[80:100]
 # loop over all image paths in the input directory
-for imagePath in imagePaths:
+for count, imagePath in enumerate(imagePaths):
+    if count > 20:
+        break
     # load the input image from disk and resize it
     image = cv2.imread(imagePath)
     image = imutils.resize(image, width=600)
@@ -57,7 +39,6 @@ for imagePath in imagePaths:
     (lpText, lpCnt) = anpr.find_and_ocr(image, psm=args["psm"],
                                         clearBorder=args["clear_border"] > 0)
     # only continue if the license plate was successfully OCR'd
-    print('OK')
     if lpText is not None and lpCnt is not None:
         # fit a rotated bounding box to the license plate contour and
         # draw the bounding box on the license plate
@@ -73,5 +54,4 @@ for imagePath in imagePaths:
         # show the output ANPR image
         print("[INFO] {}".format(lpText))
         cv2.imshow("Output ANPR", image)
-        #cv2.waitKey(0)
-    cv2.waitKey(0)
+        cv2.waitKey(0)

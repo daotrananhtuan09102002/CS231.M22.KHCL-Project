@@ -110,7 +110,7 @@ class PyImageSearchANPR:
                 # associated with it
         return (roi, lpCnt)
 
-    def build_tesseract_options(self, psm=7):
+    def build_tesseract_options(self, psm=6):
         # tell Tesseract to only OCR alphanumeric characters
         alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
         options = "-c tessedit_char_whitelist={}".format(alphanumeric)
@@ -119,7 +119,7 @@ class PyImageSearchANPR:
         # return the built options string
         return options
 
-    def find_and_ocr(self, image, psm=7, clearBorder=False):
+    def find_and_ocr(self, image, psm=6, clearBorder=False):
         # initialize the license plate text
         lpText = None
         # convert the input image to grayscale, locate all candidate

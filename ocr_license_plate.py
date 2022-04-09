@@ -18,7 +18,7 @@ ap.add_argument("-i", "--input", required=True,
                 help="path to input directory of images")
 ap.add_argument("-c", "--clear-border", type=int, default=-1,
                 help="whether or to clear border pixels before OCR'ing")
-ap.add_argument("-p", "--psm", type=int, default=7,
+ap.add_argument("-p", "--psm", type=int, default=6,
                 help="default PSM mode for OCR'ing license plates")
 ap.add_argument("-d", "--debug", type=int, default=-1,
                 help="whether or not to show additional visualizations")
@@ -27,10 +27,10 @@ args = vars(ap.parse_args())
 # initialize our ANPR class
 anpr = PyImageSearchANPR(debug=args["debug"] > 0)
 # grab all image paths in the input directory
-imagePaths = sorted(list(paths.list_images(args["input"])))[80:100]
+imagePaths = sorted(list(paths.list_images(args["input"])))[100:120]
 # loop over all image paths in the input directory
 for count, imagePath in enumerate(imagePaths):
-    if count > 20:
+    if count > 2:
         break
     # load the input image from disk and resize it
     image = cv2.imread(imagePath)

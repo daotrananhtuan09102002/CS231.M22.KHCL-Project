@@ -27,11 +27,11 @@ args = vars(ap.parse_args())
 # initialize our ANPR class
 anpr = PyImageSearchANPR(debug=args["debug"] > 0)
 # grab all image paths in the input directory
-imagePaths = sorted(list(paths.list_images(args["input"])))[100:120]
+imagePaths = sorted(list(paths.list_images(args["input"])))[:10]
 # loop over all image paths in the input directory
-for count, imagePath in enumerate(imagePaths):
-    if count > 2:
-        break
+
+count = 0
+for imagePath in imagePaths:
     # load the input image from disk and resize it
     image = cv2.imread(imagePath)
     image = imutils.resize(image, width=600)
@@ -40,6 +40,7 @@ for count, imagePath in enumerate(imagePaths):
                                         clearBorder=args["clear_border"] > 0)
     # only continue if the license plate was successfully OCR'd
     if lpText is not None and lpCnt is not None:
+        count += 1
         # fit a rotated bounding box to the license plate contour and
         # draw the bounding box on the license plate
         box = cv2.boxPoints(cv2.minAreaRect(lpCnt))
@@ -53,5 +54,9 @@ for count, imagePath in enumerate(imagePaths):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
         # show the output ANPR image
         print("[INFO] {}".format(lpText))
-        cv2.imshow("Output ANPR", image)
-        cv2.waitKey(0)
+    cv2.imshow("Output ANPR", image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+print('Detected {} license plates'.format(count))
+print('Percentage of detected license plates: {:.2f}'.format(count/len(imagePaths)))

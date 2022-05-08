@@ -7,8 +7,34 @@ import cv2
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
+
+def preprocessing_lp_OCR(image):
+    width = 300
+    height = int(300 * image.shape[0] / image.shape[1])
+    image = cv2.resize(image, (width, height), interpolation=cv2.INTER_AREA)
+
+    kernel = np.ones((1, 1), dtype='uint8')
+    image = cv2.dilate(image, kernel, iterations=1)
+    image = cv2.erode(image, kernel, iterations=1)
+    image = cv2.GaussianBlur(image, (5, 5), 0)
+    image = cv2.medianBlur(image, 5)
+    image = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    image = 255 - image
+    return image
+
+
+def build_tesseract_options(psm=6):
+    # tell Tesseract to only OCR alphanumeric characters
+    alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    options = "-c tessedit_char_whitelist={}".format(alphanumeric)
+    # set the PSM mode
+    options += " --psm {}".format(psm)
+    # return the built options string
+    return options
+
+
 class PyImageSearchANPR:
-    def __init__(self, minAR=1.2, maxAR=2, debug=False):
+    def __init__(self, minAR=1.1, maxAR=1.5, debug=False):
         # store the minimum and maximum rectangular aspect ratio
         # values along with whether or not we are in debug mode
         self.minAR = minAR
@@ -24,13 +50,20 @@ class PyImageSearchANPR:
             if waitKey:
                 cv2.waitKey(0)
 
-    def locate_license_plate_candidates(self, gray, keep=5):
+    def locate_license_plate_candidates(self, gray, keep=3):
         # perform a blackhat morphological operation that will allow
         # us to reveal dark regions (i.e., text) on light backgrounds
         # (i.e., the license plate itself)
+        height, width = gray.shape
+        self.debug_imshow("Gray", gray)
         rectKern = cv2.getStructuringElement(cv2.MORPH_RECT, (13, 5))
-        blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, rectKern)
-        self.debug_imshow("Blackhat", blackhat)
+        topHat = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, rectKern)
+        blackHat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, rectKern)
+        gray = cv2.add(gray, topHat)
+        gray = cv2.subtract(gray, blackHat)
+        self.debug_imshow("Top Hat", topHat)
+        self.debug_imshow("Blackhat", blackHat)
+        self.debug_imshow("subtract", gray)
         # next, find regions in the image that are light
         squareKern = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         light = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, squareKern)
@@ -40,7 +73,7 @@ class PyImageSearchANPR:
         # compute the Scharr gradient representation of the blackhat
         # image in the x-direction and then scale the result back to
         # the range [0, 255]
-        gradX = cv2.Sobel(blackhat, ddepth=cv2.CV_32F,
+        gradX = cv2.Sobel(gray, ddepth=cv2.CV_32F,
                           dx=1, dy=0, ksize=-1)
         gradX = np.absolute(gradX)
         (minVal, maxVal) = (np.min(gradX), np.max(gradX))
@@ -80,6 +113,8 @@ class PyImageSearchANPR:
         # initialize the license plate contour and ROI
         lpCnt = None
         roi = None
+        contours = cv2.drawContours(gray.copy(), candidates, -1, (0, 255, 0), 3)
+        self.debug_imshow("Contours", contours)
         # loop over the license plate candidate contours
         for c in candidates:
             # compute the bounding box of the contour and then use
@@ -105,19 +140,10 @@ class PyImageSearchANPR:
                 # plate region
                 self.debug_imshow("License Plate", licensePlate)
                 self.debug_imshow("ROI", roi, waitKey=True)
-                break
+                # break
                 # return a 2-tuple of the license plate ROI and the contour
                 # associated with it
         return (roi, lpCnt)
-
-    def build_tesseract_options(self, psm=6):
-        # tell Tesseract to only OCR alphanumeric characters
-        alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-        options = "-c tessedit_char_whitelist={}".format(alphanumeric)
-        # set the PSM mode
-        options += " --psm {}".format(psm)
-        # return the built options string
-        return options
 
     def find_and_ocr(self, image, psm=6, clearBorder=False):
         # initialize the license plate text
@@ -125,7 +151,11 @@ class PyImageSearchANPR:
         # convert the input image to grayscale, locate all candidate
         # license plate regions in the image, and then process the
         # candidates, leaving us with the *actual* license plate
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        imgHue, imgSatur, gray = cv2.split(hsv)
+        #
+        # gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         candidates = self.locate_license_plate_candidates(gray)
         (lp, lpCnt) = self.locate_license_plate(gray, candidates,
                                                 clearBorder=clearBorder)
@@ -133,9 +163,12 @@ class PyImageSearchANPR:
         # empty
         if lp is not None:
             # OCR the license plate
-            options = self.build_tesseract_options(psm=psm)
+            options = build_tesseract_options(psm=psm)
+            # cv2.imshow("License Plate 1", lp)
+            # lp = preprocessing_lp_OCR(lp)
             lpText = pytesseract.image_to_string(lp, config=options)
             self.debug_imshow("License Plate", lp)
+            cv2.imshow("License Plate", lp)
         # return a 2-tuple of the OCR'd license plate text along with
         # the contour associated with the license plate region
         return (lpText, lpCnt)

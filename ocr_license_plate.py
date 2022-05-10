@@ -4,7 +4,7 @@ from imutils import paths
 import argparse
 import imutils
 import cv2
-
+from character_segmentation import character_segmentation
 
 def cleanup_text(text):
     # strip out non-ASCII text so we can draw the text on the image
@@ -22,41 +22,40 @@ ap.add_argument("-p", "--psm", type=int, default=6,
                 help="default PSM mode for OCR'ing license plates")
 ap.add_argument("-d", "--debug", type=int, default=-1,
                 help="whether or not to show additional visualizations")
+ap.add_argument("-s", "--save", type=int, default=-1,
+                help="save output or not")
 args = vars(ap.parse_args())
 
 # initialize our ANPR class
-anpr = PyImageSearchANPR(debug=args["debug"] > 0)
+anpr = PyImageSearchANPR(debug=args["debug"] > 0, save_image=args["save"] > 0)
+
+
 # grab all image paths in the input directory
-imagePaths = sorted(list(paths.list_images(args["input"])))[:10]
+imagePaths = sorted(list(paths.list_images(args["input"])))[100:120]
 # loop over all image paths in the input directory
 
 count = 0
-for imagePath in imagePaths:
+for i, imagePath in enumerate(imagePaths, start=1):
     # load the input image from disk and resize it
     image = cv2.imread(imagePath)
     image = imutils.resize(image, width=600)
     # apply automatic license plate recognition
-    (lpText, lpCnt) = anpr.find_and_ocr(image, psm=args["psm"],
+    lpText, lpCnt, ROI_list = anpr.find_and_ocr(image, psm=args["psm"],
                                         clearBorder=args["clear_border"] > 0)
+    print(f'Processing image: {i}')
     # only continue if the license plate was successfully OCR'd
-    if lpText is not None and lpCnt is not None:
+    # if lpText is not None and lpCnt is not None:
+    if len(lpCnt) > 0:
         count += 1
-        # fit a rotated bounding box to the license plate contour and
-        # draw the bounding box on the license plate
-        box = cv2.boxPoints(cv2.minAreaRect(lpCnt))
-        box = box.astype("int")
-        cv2.drawContours(image, [box], -1, (0, 255, 0), 2)
-        # compute a normal (unrotated) bounding box for the license
-        # plate and then draw the OCR'd license plate text on the
-        # image
-        (x, y, w, h) = cv2.boundingRect(lpCnt)
-        cv2.putText(image, cleanup_text(lpText), (x, y - 15),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
-        # show the output ANPR image
-        print("[INFO] {}".format(lpText))
-    cv2.imshow("Output ANPR", image)
-    cv2.waitKey(0)
+        # for j, x in enumerate(ROI_list,start=1):
+        #     cv2.imwrite(f'outputANPR2/{count}_{j}.jpg', x)
+        # loop over the contours
+        for (j, r) in enumerate(ROI_list, start=1):
+            seg_img = character_segmentation(r, n_clusters = 3)
+            seg_img.segment()
+            cv2.waitKey(0)
     cv2.destroyAllWindows()
 
 print('Detected {} license plates'.format(count))
+print('Number of images: {}'.format(len(imagePaths)))
 print('Percentage of detected license plates: {:.2f}'.format(count/len(imagePaths)))

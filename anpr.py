@@ -8,6 +8,46 @@ import cv2
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 
+def find_if_close(cnt1, cnt2):
+    row1, row2 = cnt1.shape[0], cnt2.shape[0]
+    for i in range(row1):
+        for j in range(row2):
+            dist = np.linalg.norm(cnt1[i] - cnt2[j])
+            if abs(dist) < 7:
+                return True
+            elif i == row1 - 1 and j == row2 - 1:
+                return False
+
+
+def merge_contours(candidates):
+    # merge the contours nearby
+    LENGTH = len(candidates)
+    status = np.zeros((LENGTH, 1))
+    for i, cnt1 in enumerate(candidates):
+        x = i
+        if i != LENGTH - 1:
+            for j, cnt2 in enumerate(candidates[i + 1:]):
+                x = x + 1
+                dist = find_if_close(cnt1, cnt2)
+                if dist == True:
+                    val = min(status[i], status[x])
+                    status[x] = status[i] = val
+                else:
+                    if status[x] == status[i]:
+                        status[x] = i + 1
+
+    unified = []
+    maximum = int(status.max()) + 1
+    for i in range(maximum):
+        pos = np.where(status == i)[0]
+        if pos.size != 0:
+            cont = np.vstack(candidates[i] for i in pos)
+            hull = cv2.convexHull(cont)
+            unified.append(hull)
+
+    return unified
+    # contours = cv2.drawContours(gray, unified, -1, (0, 255, 0), 3)
+    # self.debug_imshow("Unified", contours)
 def preprocessing_lp_OCR(image):
     width = 300
     height = int(300 * image.shape[0] / image.shape[1])
@@ -34,11 +74,12 @@ def build_tesseract_options(psm=6):
 
 
 class PyImageSearchANPR:
-    def __init__(self, minAR=1.1, maxAR=1.5, debug=False):
+    def __init__(self, minAR=1.1, maxAR=1.6, minContourArea=1000, debug=False, save_image=False):
         # store the minimum and maximum rectangular aspect ratio
         # values along with whether or not we are in debug mode
         self.minAR = minAR
         self.maxAR = maxAR
+        self.minContourArea = minContourArea
         self.debug = debug
 
     def debug_imshow(self, title, image, waitKey=False):
@@ -50,11 +91,10 @@ class PyImageSearchANPR:
             if waitKey:
                 cv2.waitKey(0)
 
-    def locate_license_plate_candidates(self, gray, keep=3):
+    def locate_license_plate_candidates(self, gray, keep=5):
         # perform a blackhat morphological operation that will allow
         # us to reveal dark regions (i.e., text) on light backgrounds
         # (i.e., the license plate itself)
-        height, width = gray.shape
         self.debug_imshow("Gray", gray)
         rectKern = cv2.getStructuringElement(cv2.MORPH_RECT, (13, 5))
         topHat = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, rectKern)
@@ -62,8 +102,8 @@ class PyImageSearchANPR:
         gray = cv2.add(gray, topHat)
         gray = cv2.subtract(gray, blackHat)
         self.debug_imshow("Top Hat", topHat)
-        self.debug_imshow("Blackhat", blackHat)
-        self.debug_imshow("subtract", gray)
+        self.debug_imshow("Black hat", blackHat)
+        self.debug_imshow("Subtract", gray)
         # next, find regions in the image that are light
         squareKern = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         light = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, squareKern)
@@ -105,46 +145,61 @@ class PyImageSearchANPR:
                                 cv2.CHAIN_APPROX_SIMPLE)
         cnts = imutils.grab_contours(cnts)
         cnts = sorted(cnts, key=cv2.contourArea, reverse=True)[:keep]
-        # return the list of contours
-        return cnts
+
+
+        return gray, cnts, thresh
 
     def locate_license_plate(self, gray, candidates,
-                             clearBorder=False):
+                             clearBorder=False, debug=False):
         # initialize the license plate contour and ROI
         lpCnt = None
         roi = None
-        contours = cv2.drawContours(gray.copy(), candidates, -1, (0, 255, 0), 3)
-        self.debug_imshow("Contours", contours)
+        if debug:
+            imageBGR = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+            contours = cv2.drawContours(imageBGR.copy(), candidates, -1, (0, 255, 0), 3)
+            self.debug_imshow("Before merge Contours", contours)
+        # merge contours
+        merged_contours = merge_contours(candidates)
+        if debug:
+            imageBGR = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+            contours = cv2.drawContours(imageBGR.copy(), merged_contours, -1, (0, 255, 0), 3)
+            self.debug_imshow("After merge Contours", contours)
         # loop over the license plate candidate contours
-        for c in candidates:
+        lpCnt = []
+        roi_list = []
+        for c in merged_contours:
             # compute the bounding box of the contour and then use
             # the bounding box to derive the aspect ratio
             (x, y, w, h) = cv2.boundingRect(c)
             ar = w / float(h)
+            # print(ar)
             # check to see if the aspect ratio is rectangular
-            if ar >= self.minAR and ar <= self.maxAR:
-                # store the license plate contour and extract the
-                # license plate from the grayscale image and then
-                # threshold it
-                lpCnt = c
-                licensePlate = gray[y:y + h, x:x + w]
-                roi = cv2.threshold(licensePlate, 0, 255,
-                                    cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
-                # check to see if we should clear any foreground
-                # pixels touching the border of the image
-                # (which typically, not but always, indicates noise)
-                if clearBorder:
-                    roi = clear_border(roi)
-                # display any debugging information and then break
-                # from the loop early since we have found the license
-                # plate region
-                self.debug_imshow("License Plate", licensePlate)
-                self.debug_imshow("ROI", roi, waitKey=True)
-                # break
-                # return a 2-tuple of the license plate ROI and the contour
-                # associated with it
-        return (roi, lpCnt)
+            if ar >= self.minAR and ar <= self.maxAR and w*h > self.minContourArea:
+                lpCnt.append(c)
 
+        return lpCnt
+
+    def character_segmentation(self, gray, lpCnt, thresh, clearborder=False, debug=False):
+        # initialize the list of extracted characters
+        chars = []
+        # loop over the license plate contours
+        for c in lpCnt:
+            # compute the bounding box for the contour
+            (x, y, w, h) = cv2.boundingRect(c)
+            # extract the character ROI
+            roi = gray[y:y + h, x:x + w]
+            # roi = cv2.adaptiveThreshold(roi, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            #                                cv2.THRESH_BINARY, 11, 2)
+            if clearborder:
+                roi = clear_border(roi)
+
+            # resize the character ROI to a fixed size
+            cv2.imshow("ROI", roi)
+            cv2.imwrite(r"outputANPR\ROI.jpg", roi)
+            cv2.waitKey(0)
+
+        # return the list of characters
+        return chars
     def find_and_ocr(self, image, psm=6, clearBorder=False):
         # initialize the license plate text
         lpText = None
@@ -156,19 +211,48 @@ class PyImageSearchANPR:
         imgHue, imgSatur, gray = cv2.split(hsv)
         #
         # gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        candidates = self.locate_license_plate_candidates(gray)
-        (lp, lpCnt) = self.locate_license_plate(gray, candidates,
+        gray, candidates, thresh = self.locate_license_plate_candidates(gray)
+        lpCnt = self.locate_license_plate(gray, candidates,
                                                 clearBorder=clearBorder)
+
+
         # only OCR the license plate if the license plate ROI is not
         # empty
-        if lp is not None:
-            # OCR the license plate
-            options = build_tesseract_options(psm=psm)
-            # cv2.imshow("License Plate 1", lp)
-            # lp = preprocessing_lp_OCR(lp)
-            lpText = pytesseract.image_to_string(lp, config=options)
-            self.debug_imshow("License Plate", lp)
-            cv2.imshow("License Plate", lp)
+        # if lp is not None:
+        #     # OCR the license plate
+        #     options = build_tesseract_options(psm=psm)
+        #     # cv2.imshow("License Plate 1", lp)
+        #     # lp = preprocessing_lp_OCR(lp)
+        #     lpText = pytesseract.image_to_string(lp, config=options)
+        #     self.debug_imshow("License Plate", lp)
+        #     cv2.imshow("License Plate", lp)
         # return a 2-tuple of the OCR'd license plate text along with
         # the contour associated with the license plate region
-        return (lpText, lpCnt)
+        img = image.copy()
+        if lpCnt is None:
+            cv2.imshow("Output", img)
+            return None, None
+        count = 0
+
+        ROI_list = []
+        for i in lpCnt:
+            # hien thi vung bien so chinh xac nhat
+            box = cv2.boxPoints(cv2.minAreaRect(i))
+            box = box.astype("int")
+            cv2.drawContours(img, [box], -1, (0, 255, 0), 2)
+            cv2.imshow("Output", img)
+
+           # cat anh de doc chu
+            x, y, w, h = cv2.boundingRect(i)
+            cv2.rectangle(img, (x, y), (x + w, y + h), (255, 255, 0), 2)
+            cv2.imshow('Output', img)
+            # doc chu tu anh gray
+            ROI = gray[y:y + h, x:x + w]
+            ROI = imutils.resize(ROI, width=200)
+            ROI_list.append(ROI)
+            count += 1
+            # cv2.imshow(f"{count}", ROI)
+        # cv2.waitKey(0)
+        # char = self.character_segmentation(gray, lpCnt, thresh, clearborder=clearBorder)
+
+        return lpText, lpCnt, ROI_list

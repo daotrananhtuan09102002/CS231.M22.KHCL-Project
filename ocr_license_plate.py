@@ -28,7 +28,7 @@ anpr = PyImageSearchANPR(debug=args["debug"] > 0)
 seg_anpr = character_segmentation(n_clusters=3, debug=args["debug"] > 0)
 
 # grab all image paths in the input directory
-imagePaths = sorted(list(paths.list_images(args["input"])))[0:20]
+imagePaths = sorted(list(paths.list_images(args["input"])))[50:70]
 # loop over all image paths in the input directory
 count = 0
 for _, imagePath in enumerate(imagePaths, start=1):

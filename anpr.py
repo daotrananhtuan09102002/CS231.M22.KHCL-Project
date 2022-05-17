@@ -118,7 +118,6 @@ class PyImageSearchANPR:
         cnts = imutils.grab_contours(cnts)
         cnts = sorted(cnts, key=cv2.contourArea, reverse=True)[:keep]
 
-
         return gray, cnts, thresh
 
     def locate_license_plate(self, gray, candidates):
@@ -142,7 +141,7 @@ class PyImageSearchANPR:
             ar = w / float(h)
             # print(ar)
             # check to see if the aspect ratio is rectangular
-            if ar >= self.minAR and ar <= self.maxAR and w*h > self.minContourArea:
+            if self.minAR <= ar <= self.maxAR and w * h > self.minContourArea:
                 lpCnt.append(c)
 
         return lpCnt
@@ -175,8 +174,7 @@ class PyImageSearchANPR:
             cv2.drawContours(img, [box], -1, (0, 255, 0), 2)
             cv2.imshow("Output", img)
 
-
-           # cat anh de doc chu
+            # cat anh de doc chu
             W = rect[1][0]
             H = rect[1][1]
 

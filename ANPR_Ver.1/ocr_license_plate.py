@@ -7,11 +7,6 @@ import cv2
 from character_segmentation import character_segmentation
 import numpy as np
 
-def cleanup_text(text):
-    # strip out non-ASCII text so we can draw the text on the image
-    # using OpenCV
-    return "".join([c if ord(c) < 128 else "" for c in text]).strip()
-
 
 def parse_args():
     # construct the argument parser and parse the arguments

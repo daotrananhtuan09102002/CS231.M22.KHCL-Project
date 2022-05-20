@@ -26,7 +26,7 @@ def main(args):
     seg_anpr = character_segmentation(n_clusters=3, debug=args["debug"] > 0)
 
     # grab all image paths in the input directory
-    imagePaths = sorted(list(paths.list_images(args["input"])))[0:10]
+    imagePaths = sorted(list(paths.list_images(args["input"])))[0:500]
     # loop over all image paths in the input directory
     count = 0
     for _, imagePath in enumerate(imagePaths, start=1):
@@ -35,10 +35,12 @@ def main(args):
         image = imutils.resize(image, width=600)
         # apply automatic license plate recognition
         lpCnt, ROI_list = anpr.find_and_ocr(image)
+        print('----------------------------------------------')
         print(f'Processing image: {_}')
         if len(lpCnt) == 0:
             print("Can't detect license plate")
             cv2.imshow("Output", image)
+            cv2.waitKey(0)
             continue
         flag = False
         for (i, r) in enumerate(ROI_list):

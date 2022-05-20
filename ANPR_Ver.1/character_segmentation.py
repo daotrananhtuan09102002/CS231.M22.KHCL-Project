@@ -98,21 +98,36 @@ class character_segmentation:
         chars_top = sorted(chars_top, key=lambda x: x[1])
         chars_bottom = sorted(chars_bottom, key=lambda x: x[1])
 
-        for i in range(len(chars_top)):
-            h, w = chars_top[i][0].shape[:2]
-            if i == 2:
-                s = reader.recognize(chars_top[i][0], detail=0, allowlist='ABCDEFGHKLMNPRSTUVXZ')
-            else:
-                s = reader.recognize(chars_top[i][0], detail=0, allowlist='0123456789')
-            if s is not None and self.debug:
-                cv2.putText(img_BGR, *s, (chars_top[i][1] + 8, chars_top[i][2] + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
-                           (0, 0, 255), 2)
-                cv2.rectangle(img_BGR, (chars_top[i][1], chars_top[i][2]),
-                             (chars_top[i][1] + w - 5, chars_top[i][2] + h - 5), (0, 255, 0), 2)
+        if len(chars_top) < 4:
+            for i in range(len(chars_top)):
+                h, w = chars_top[i][0].shape[:2]
+                s = reader.recognize(chars_top[i][0], detail=0, allowlist='0123456789ABCDEFGHIJKLMNOPQRSTUVWXZ')
+                if s is not None and self.debug:
+                    cv2.putText(img_BGR, *s, (chars_top[i][1] + 8, chars_top[i][2] + 20), cv2.FONT_HERSHEY_SIMPLEX,
+                                0.75,
+                                (0, 0, 255), 2)
+                    cv2.rectangle(img_BGR, (chars_top[i][1], chars_top[i][2]),
+                                  (chars_top[i][1] + w - 5, chars_top[i][2] + h - 5), (0, 255, 0), 2)
 
-                self.debug_imshow('char', chars_top[i][0], waitKey=True)
+                    self.debug_imshow('char', chars_top[i][0], waitKey=True)
 
-            s_top.append(*s)
+                s_top.append(*s)
+        else:
+            for i in range(len(chars_top)):
+                h, w = chars_top[i][0].shape[:2]
+                if i == 2:
+                    s = reader.recognize(chars_top[i][0], detail=0, allowlist='ABCDEFGHKLMNPRSTUVXZ')
+                else:
+                    s = reader.recognize(chars_top[i][0], detail=0, allowlist='0123456789')
+                if s is not None and self.debug:
+                    cv2.putText(img_BGR, *s, (chars_top[i][1] + 8, chars_top[i][2] + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
+                               (0, 0, 255), 2)
+                    cv2.rectangle(img_BGR, (chars_top[i][1], chars_top[i][2]),
+                                 (chars_top[i][1] + w - 5, chars_top[i][2] + h - 5), (0, 255, 0), 2)
+
+                    self.debug_imshow('char', chars_top[i][0], waitKey=True)
+
+                s_top.append(*s)
 
         for i in range(len(chars_bottom)):
             h, w = chars_bottom[i][0].shape[:2]

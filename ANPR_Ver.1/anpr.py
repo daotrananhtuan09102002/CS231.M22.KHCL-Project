@@ -165,7 +165,7 @@ class PyImageSearchANPR:
         lpCnt = self.locate_license_plate(gray, candidates)
         img = image.copy()
         if len(lpCnt) == 0:
-            return None, None
+            return [], []
         count = 0
 
         ROI_list = []

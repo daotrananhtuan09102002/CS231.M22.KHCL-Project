@@ -9,7 +9,7 @@ def find_if_close(cnt1, cnt2):
     for i in range(row1):
         for j in range(row2):
             dist = np.linalg.norm(cnt1[i] - cnt2[j])
-            if abs(dist) < 7:
+            if abs(dist) < 8:
                 return True
             elif i == row1 - 1 and j == row2 - 1:
                 return False
@@ -47,16 +47,14 @@ def merge_contours(candidates):
 
 class PyImageSearchANPR:
     def __init__(self, minAR=1.1, maxAR=1.6, minContourArea=1000, debug=False):
-        # store the minimum and maximum rectangular aspect ratio
-        # values along with whether or not we are in debug mode
+        # khởi tạo tham số
         self.minAR = minAR
         self.maxAR = maxAR
         self.minContourArea = minContourArea
         self.debug = debug
 
     def debug_imshow(self, title, image, waitKey=False):
-        # check to see if we are in debug mode, and if so, show the
-        # image with the supplied title
+        # nếu chọn chế độ debug thì hiển thị ảnh
         if self.debug:
             cv2.imshow(title, image)
             # check to see if we should wait for a keypress
@@ -68,6 +66,8 @@ class PyImageSearchANPR:
         # us to reveal dark regions (i.e., text) on light backgrounds
         # (i.e., the license plate itself)
         self.debug_imshow("Gray", gray)
+
+        # tăng độ tương phản cho ảnh xám
         rectKern = cv2.getStructuringElement(cv2.MORPH_RECT, (13, 5))
         topHat = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, rectKern)
         blackHat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, rectKern)
@@ -76,8 +76,10 @@ class PyImageSearchANPR:
         self.debug_imshow("Top Hat", topHat)
         self.debug_imshow("Black hat", blackHat)
         self.debug_imshow("Subtract", gray)
+
         # next, find regions in the image that are light
-        squareKern = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        # tìm những vùng trong ảnh có màu sắc trắng
+        squareKern = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
         light = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, squareKern)
         light = cv2.threshold(light, 0, 255,
                               cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
@@ -107,8 +109,8 @@ class PyImageSearchANPR:
         # take the bitwise AND between the threshold result and the
         # light regions of the image
         thresh = cv2.bitwise_and(thresh, thresh, mask=light)
-        thresh = cv2.dilate(thresh, None, iterations=1)
-        thresh = cv2.erode(thresh, None, iterations=1)
+        thresh = cv2.dilate(thresh, None, iterations=2)
+        thresh = cv2.erode(thresh, None, iterations=2)
         self.debug_imshow("Final", thresh, waitKey=True)
         # find contours in the thresholded image and sort them by
         # their size in descending order, keeping only the largest
@@ -121,47 +123,48 @@ class PyImageSearchANPR:
         return gray, cnts, thresh
 
     def locate_license_plate(self, gray, candidates):
-        # initialize the license plate contour and ROI
+        # hiển thị những contour trước khi kết hợp
         if self.debug:
             imageBGR = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
             contours = cv2.drawContours(imageBGR.copy(), candidates, -1, (0, 255, 0), 3)
             self.debug_imshow("Before merge Contours", contours)
+
         # merge contours
         merged_contours = merge_contours(candidates)
+
+        # hiển thị những contour sau khi kết hợp
         if self.debug:
             imageBGR = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
             contours = cv2.drawContours(imageBGR.copy(), merged_contours, -1, (0, 255, 0), 3)
-            self.debug_imshow("After merge Contours", contours)
-        # loop over the license plate candidate contours
+            self.debug_imshow("After merge Contours", contours, waitKey=True)
+
+        # duyệt qua các contour đã kết hợp và tìm ra những contour thích hợp
         lpCnt = []
         for c in merged_contours:
-            # compute the bounding box of the contour and then use
-            # the bounding box to derive the aspect ratio
+            # tính toán kích thước của contour
             (x, y, w, h) = cv2.boundingRect(c)
             ar = w / float(h)
             # print(ar)
-            # check to see if the aspect ratio is rectangular
+
+            # kiểm tra kích thước contour có phù hợp không
             if self.minAR <= ar <= self.maxAR and w * h > self.minContourArea:
                 lpCnt.append(c)
 
         return lpCnt
 
     def find_and_ocr(self, image):
-        # initialize the license plate text
-        lpText = None
         # convert the input image to grayscale, locate all candidate
         # license plate regions in the image, and then process the
-        # candidates, leaving us with the *actual* license plate
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-        imgHue, imgSatur, gray = cv2.split(hsv)
+        # # candidates, leaving us with the *actual* license plate
+        # hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         #
-        # gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        # imgHue, imgSatur, gray = cv2.split(hsv)
+        #
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         gray, candidates, thresh = self.locate_license_plate_candidates(gray)
         lpCnt = self.locate_license_plate(gray, candidates)
         img = image.copy()
-        if lpCnt is None:
-            cv2.imshow("Output", img)
+        if len(lpCnt) == 0:
             return None, None
         count = 0
 
@@ -171,8 +174,8 @@ class PyImageSearchANPR:
             rect = cv2.minAreaRect(i)
             box = cv2.boxPoints(rect)
             box = np.int0(box)
-            cv2.drawContours(img, [box], -1, (0, 255, 0), 2)
-            cv2.imshow("Output", img)
+            # cv2.drawContours(img, [box], -1, (0, 255, 0), 2)
+            # cv2.imshow("Output", img)
 
             # cat anh de doc chu
             W = rect[1][0]
@@ -189,7 +192,7 @@ class PyImageSearchANPR:
             if angle > 45:
                 angle -= 90
 
-            # Center of rectangle in source image
+            # xoay ảnh
             center = ((x1 + x2) / 2, (y1 + y2) / 2)
             # Size of the upright rectangle bounding the rotated rectangle
             size = (x2 - x1, y2 - y1)
@@ -207,4 +210,4 @@ class PyImageSearchANPR:
             # cv2.imshow(f"{count}", ROI)
         # cv2.waitKey(0)
 
-        return ROI_list
+        return lpCnt, ROI_list

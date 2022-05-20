@@ -1,40 +1,20 @@
 from sklearn.cluster import KMeans
 import numpy as np
-import cv2 as cv
-import pytesseract
+import cv2
+import easyocr
 
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-
-
-def build_tesseract_options(psm=10):
-    # tell Tesseract to only OCR alphanumeric characters
-    alphanumeric = "ABCDEFGHKLMNPRSTUVXYZ0123456789"
-    # alphanumeric = "0123456789"
-    options = "-c tessedit_char_whitelist={}".format(alphanumeric)
-    # set the PSM mode
-    options += " --psm {}".format(psm)
-    # return the built options string
-    return options
+reader = easyocr.Reader(['en'], gpu=False)
 
 
 def preprocessing_lp_OCR(image):
-    width = 150
-    height = int(150 * image.shape[0] / image.shape[1])
-    image = cv.resize(image, (width, height), interpolation=cv.INTER_AREA)
-
-    kernel = np.ones((5, 5), dtype='uint8')
-    image = cv.dilate(image, kernel, iterations=1)
-    image = cv.erode(image, kernel, iterations=1)
-    image = cv.medianBlur(image, 3)
-    image = cv.threshold(image, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)[1]
-    return image
+    img = cv2.threshold(image, 100, 255, cv2.THRESH_BINARY)[1]
+    return img
 
 
-MIN_RATIO_AREA = 0.02
+MIN_RATIO_AREA = 0.015
 MAX_RATIO_AREA = 0.07
 MIN_RATIO = 2
-MAX_RATIO = 5.5
-config = build_tesseract_options(10)
+MAX_RATIO = 6
 
 
 def KMeans_(img, n_clusters=3):
@@ -56,32 +36,34 @@ class character_segmentation:
         # check to see if we are in debug mode, and if so, show the
         # image with the supplied title
         if self.debug:
-            cv.imshow(title, image)
+            cv2.imshow(title, image)
             # check to see if we should wait for a keypress
             if waitKey:
-                cv.waitKey(0)
+                cv2.waitKey(0)
 
     def segment(self, img):
+        height, width = img.shape
         seg_img = KMeans_(img, self.n_clusters)
         area = seg_img.shape[0] * seg_img.shape[1]
         seg_img = seg_img.astype(np.uint8)
-        ret, thresh = cv.threshold(seg_img, 100, 255, cv.THRESH_BINARY)
-        blur = cv.GaussianBlur(thresh, (5, 5), 0)
-        im_bw = cv.Canny(blur, 10, 200)
-        # im_bw = cv.morphologyEx(im_bw, cv.MORPH_CLOSE, kernel = (3, 3), iterations=2)
-        cv.imshow("Canny", im_bw)
+        ret, thresh = cv2.threshold(seg_img, 100, 255, cv2.THRESH_BINARY)
+        blur = cv2.GaussianBlur(thresh, (5, 5), 0)
+        im_bw = cv2.Canny(blur, 10, 200)
+        self.debug_imshow('im_bw', im_bw)
 
-        img_BGR = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
+        img_BGR = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
-        contours, hierarchy = cv.findContours(im_bw, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-        contours = sorted(contours, key=cv.contourArea, reverse=True)[:15]
-        cnts = cv.drawContours(img_BGR.copy(), contours, -1, (0, 255, 0), 3)
-        cv.imshow("Contour", cnts)
+        contours, hierarchy = cv2.findContours(im_bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours = sorted(contours, key=cv2.contourArea, reverse=True)[:15]
+
+        if self.debug:
+            cnts = cv2.drawContours(img_BGR.copy(), contours, -1, (0, 255, 0), 3)
+            self.debug_imshow('Contours', cnts)
 
         new_contours = []
-        img_BGR = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
+
         for c in contours:
-            (x, y, w, h) = cv.boundingRect(c)
+            (x, y, w, h) = cv2.boundingRect(c)
             # print('Cnt area:', w * h, 'ratio', h / w)
             if MIN_RATIO_AREA * area <= w * h <= MAX_RATIO_AREA * area \
                     and MIN_RATIO <= h / w <= MAX_RATIO:
@@ -90,31 +72,60 @@ class character_segmentation:
         chars = []
         X, Y = [], []
         for c in new_contours:
-            (x, y, w, h) = cv.boundingRect(c)
-            chars.append(seg_img[y:y + h + 5, x:x + w + 5])
+            (x, y, w, h) = cv2.boundingRect(c)
+
+            x_cut = x - 5 if x - 5 > 0 else 0
+            y_cut = y - 5 if y - 5 > 0 else 0
+            w_cut = w + 5 if x + w + 10 < width else w
+            h_cut = h + 5 if y + h + 10 < height else h
+
+            if x_cut == 0 or x + w_cut == width:
+                continue
+            chars.append(seg_img[y_cut:y + h_cut, x_cut:x + w_cut])
             X.append(x)
             Y.append(y)
-            cv.rectangle(img_BGR, (x - 5, y - 5), (x + w + 5, y + h + 5), (0, 255, 0), 2)
 
-        vis_list = []
-        for j, c in enumerate(chars):
-            list_img = []
-            h, w = c.shape[:2]
-            base_size = (h + 50, w + 50)
-            for i in range(3):
-                base = np.full(base_size, 255, dtype=int)
-                cv.rectangle(base, (0, 0), (w + 50, h + 50), (255, 255, 255), 30)
-                base[25:h + 25, 25:w + 25] = c
-                list_img.append(base)
-            vis = np.concatenate((list_img[0], list_img[1]), axis=1)
-            vis = np.concatenate((vis, list_img[2]), axis=1)
-            vis = vis.astype(np.uint8)
-            vis = preprocessing_lp_OCR(vis)
-            s = pytesseract.image_to_string(vis, config=config)
-            if len(s) > 0:
-                s_max = max(s, key=s.count)
-                cv.putText(img_BGR, s_max, (X[j] + 10, Y[j] + 15), cv.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
-            cv.imshow('merge', vis)
-            cv.waitKey(0)
-        cv.imshow("Segmented", img_BGR)
-        return vis_list
+        s_top, s_bottom = [], []
+        chars_top = []
+        chars_bottom = []
+
+        for i, c in enumerate(chars):
+            if Y[i] < height / 2 - 30:
+                chars_top.append([c, X[i], Y[i]])
+            else:
+                chars_bottom.append([c, X[i], Y[i]])
+
+        chars_top = sorted(chars_top, key=lambda x: x[1])
+        chars_bottom = sorted(chars_bottom, key=lambda x: x[1])
+
+        for i in range(len(chars_top)):
+            h, w = chars_top[i][0].shape[:2]
+            if i == 2:
+                s = reader.recognize(chars_top[i][0], detail=0, allowlist='ABCDEFGHKLMNPRSTUVXZ')
+            else:
+                s = reader.recognize(chars_top[i][0], detail=0, allowlist='0123456789')
+            if s is not None and self.debug:
+                cv2.putText(img_BGR, *s, (chars_top[i][1] + 8, chars_top[i][2] + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
+                           (0, 0, 255), 2)
+                cv2.rectangle(img_BGR, (chars_top[i][1], chars_top[i][2]),
+                             (chars_top[i][1] + w - 5, chars_top[i][2] + h - 5), (0, 255, 0), 2)
+
+                self.debug_imshow('char', chars_top[i][0], waitKey=True)
+
+            s_top.append(*s)
+
+        for i in range(len(chars_bottom)):
+            h, w = chars_bottom[i][0].shape[:2]
+            s = reader.recognize(chars_bottom[i][0], detail=0, allowlist='0123456789')
+            if s is not None and self.debug:
+                cv2.putText(img_BGR, *s, (chars_bottom[i][1] + 8, chars_bottom[i][2] + 20), cv2.FONT_HERSHEY_SIMPLEX,
+                           0.75, (0, 0, 255), 2)
+                cv2.rectangle(img_BGR, (chars_bottom[i][1], chars_bottom[i][2]),
+                             (chars_bottom[i][1] + w - 5, chars_bottom[i][2] + h - 5), (0, 255, 0), 2)
+
+                self.debug_imshow('char', chars_bottom[i][0], waitKey=True)
+
+            s_bottom.append(*s)
+
+        self.debug_imshow('Result', img_BGR)
+        return ''.join(s_top) + '\n' + ''.join(s_bottom)

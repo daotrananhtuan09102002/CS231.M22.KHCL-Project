@@ -109,6 +109,7 @@ class PyImageSearchANPR:
         # take the bitwise AND between the threshold result and the
         # light regions of the image
         thresh = cv2.bitwise_and(thresh, thresh, mask=light)
+        self.debug_imshow("Grad Thresh & Light", thresh)
         thresh = cv2.dilate(thresh, None, iterations=2)
         thresh = cv2.erode(thresh, None, iterations=2)
         self.debug_imshow("Final", thresh, waitKey=True)
@@ -166,7 +167,6 @@ class PyImageSearchANPR:
         img = image.copy()
         if len(lpCnt) == 0:
             return [], []
-        count = 0
 
         ROI_list = []
         for i in lpCnt:
@@ -206,8 +206,5 @@ class PyImageSearchANPR:
             ROI = cv2.getRectSubPix(cropped, (int(croppedW), int(croppedH)), (size[0] / 2, size[1] / 2))
             ROI = imutils.resize(ROI, width=200)
             ROI_list.append(ROI)
-            count += 1
-            # cv2.imshow(f"{count}", ROI)
-        # cv2.waitKey(0)
 
         return lpCnt, ROI_list

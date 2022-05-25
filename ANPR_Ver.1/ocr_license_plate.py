@@ -27,7 +27,7 @@ def main(args):
     seg_anpr = character_segmentation(n_clusters=3, debug=args["debug"] > 0)
 
     # grab all image paths in the input directory
-    imagePaths = sorted(list(paths.list_images(args["input"])))
+    imagePaths = sorted(list(paths.list_images(args["input"])))[3:4]
     # loop over all image paths in the input directory
     count = 0
     start = time.time()

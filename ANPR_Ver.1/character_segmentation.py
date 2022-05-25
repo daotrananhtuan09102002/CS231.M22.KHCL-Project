@@ -42,10 +42,12 @@ class character_segmentation:
                 cv2.waitKey(0)
 
     def segment(self, img):
+        self.debug_imshow("Original", img)
         height, width = img.shape
         seg_img = KMeans_(img, self.n_clusters)
         area = seg_img.shape[0] * seg_img.shape[1]
         seg_img = seg_img.astype(np.uint8)
+        self.debug_imshow("seg_img", seg_img)
         ret, thresh = cv2.threshold(seg_img, 100, 255, cv2.THRESH_BINARY)
         blur = cv2.GaussianBlur(thresh, (5, 5), 0)
         im_bw = cv2.Canny(blur, 10, 200)

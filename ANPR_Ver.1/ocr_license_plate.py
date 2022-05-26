@@ -5,7 +5,6 @@ import argparse
 import imutils
 import cv2
 from character_segmentation import character_segmentation
-import numpy as np
 import time
 
 
@@ -27,7 +26,7 @@ def main(args):
     seg_anpr = character_segmentation(n_clusters=3, debug=args["debug"] > 0)
 
     # grab all image paths in the input directory
-    imagePaths = sorted(list(paths.list_images(args["input"])))[3:4]
+    imagePaths = sorted(list(paths.list_images(args["input"])))
     # loop over all image paths in the input directory
     count = 0
     start = time.time()
@@ -42,18 +41,16 @@ def main(args):
         if len(lpCnt) == 0:
             print("Can't detect license plate")
             cv2.imshow(f"Output{_}", image)
-            cv2.waitKey(0)
+            # cv2.waitKey(0)
             continue
         flag = False
         for (i, r) in enumerate(ROI_list):
             char = seg_anpr.segment(r)
             if len(char) > 2:
                 count += 1
-                rect = cv2.minAreaRect(lpCnt[i])
-                box = cv2.boxPoints(rect)
-                box = np.int0(box)
-                cv2.drawContours(image, [box], -1, (0, 255, 0), 2)
+
                 x, y, w, h = cv2.boundingRect(lpCnt[i])
+                cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
                 cv2.putText(image, '{}'.format(char.replace('\n', '-')),
                              (x - 15, y - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 255), 2)
                 cv2.imshow(f"Output_{_}", image)

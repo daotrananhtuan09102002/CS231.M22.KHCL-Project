@@ -4,47 +4,6 @@ import imutils
 import cv2
 
 
-def find_if_close(cnt1, cnt2):
-    row1, row2 = cnt1.shape[0], cnt2.shape[0]
-    for i in range(row1):
-        for j in range(row2):
-            dist = np.linalg.norm(cnt1[i] - cnt2[j])
-            if abs(dist) < 8:
-                return True
-            elif i == row1 - 1 and j == row2 - 1:
-                return False
-
-
-def merge_contours(candidates):
-    # merge the contours nearby
-    LENGTH = len(candidates)
-    status = np.zeros((LENGTH, 1))
-    for i, cnt1 in enumerate(candidates):
-        x = i
-        if i != LENGTH - 1:
-            for j, cnt2 in enumerate(candidates[i + 1:]):
-                x = x + 1
-                dist = find_if_close(cnt1, cnt2)
-                if dist == True:
-                    val = min(status[i], status[x])
-                    status[x] = status[i] = val
-                else:
-                    if status[x] == status[i]:
-                        status[x] = i + 1
-
-    unified = []
-    maximum = int(status.max()) + 1
-    for i in range(maximum):
-        pos = np.where(status == i)[0]
-        if pos.size != 0:
-            cont = np.vstack(candidates[i] for i in pos)
-            hull = cv2.convexHull(cont)
-            unified.append(hull)
-
-    return unified
-    # contours = cv2.drawContours(gray, unified, -1, (0, 255, 0), 3)
-
-
 class PyImageSearchANPR:
     def __init__(self, minAR=1.1, maxAR=1.6, minContourArea=1000, debug=False):
         # khởi tạo tham số
@@ -103,15 +62,15 @@ class PyImageSearchANPR:
         self.debug_imshow("Grad Thresh", thresh)
         # perform a series of erosions and dilations to clean up the
         # thresholded image
-        thresh = cv2.erode(thresh, None, iterations=2)
-        thresh = cv2.dilate(thresh, None, iterations=2)
+        thresh = cv2.erode(thresh, None, iterations=3) # 3
+        thresh = cv2.dilate(thresh, None, iterations=3) # 3
         self.debug_imshow("Grad Erode/Dilate", thresh)
         # take the bitwise AND between the threshold result and the
         # light regions of the image
         thresh = cv2.bitwise_and(thresh, thresh, mask=light)
         self.debug_imshow("Grad Thresh & Light", thresh)
-        thresh = cv2.dilate(thresh, None, iterations=2)
-        thresh = cv2.erode(thresh, None, iterations=2)
+        thresh = cv2.dilate(thresh, None, iterations=3) # 3
+        thresh = cv2.erode(thresh, None, iterations=1)  # 1
         self.debug_imshow("Final", thresh, waitKey=True)
         # find contours in the thresholded image and sort them by
         # their size in descending order, keeping only the largest
@@ -124,24 +83,8 @@ class PyImageSearchANPR:
         return gray, cnts, thresh
 
     def locate_license_plate(self, gray, candidates):
-        # hiển thị những contour trước khi kết hợp
-        if self.debug:
-            imageBGR = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-            contours = cv2.drawContours(imageBGR.copy(), candidates, -1, (0, 255, 0), 3)
-            self.debug_imshow("Before merge Contours", contours)
-
-        # merge contours
-        merged_contours = merge_contours(candidates)
-
-        # hiển thị những contour sau khi kết hợp
-        if self.debug:
-            imageBGR = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-            contours = cv2.drawContours(imageBGR.copy(), merged_contours, -1, (0, 255, 0), 3)
-            self.debug_imshow("After merge Contours", contours, waitKey=True)
-
-        # duyệt qua các contour đã kết hợp và tìm ra những contour thích hợp
         lpCnt = []
-        for c in merged_contours:
+        for c in candidates:
             # tính toán kích thước của contour
             (x, y, w, h) = cv2.boundingRect(c)
             ar = w / float(h)
@@ -156,15 +99,9 @@ class PyImageSearchANPR:
     def find_and_ocr(self, image):
         # convert the input image to grayscale, locate all candidate
         # license plate regions in the image, and then process the
-        # # candidates, leaving us with the *actual* license plate
-        # hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-        #
-        # imgHue, imgSatur, gray = cv2.split(hsv)
-        #
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         gray, candidates, thresh = self.locate_license_plate_candidates(gray)
         lpCnt = self.locate_license_plate(gray, candidates)
-        img = image.copy()
         if len(lpCnt) == 0:
             return [], []
 

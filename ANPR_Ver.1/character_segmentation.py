@@ -5,12 +5,6 @@ import easyocr
 
 reader = easyocr.Reader(['en'], gpu=False)
 
-
-def preprocessing_lp_OCR(image):
-    img = cv2.threshold(image, 100, 255, cv2.THRESH_BINARY)[1]
-    return img
-
-
 MIN_RATIO_AREA = 0.015
 MAX_RATIO_AREA = 0.07
 MIN_RATIO = 2
@@ -83,7 +77,7 @@ class character_segmentation:
 
             if x_cut == 0 or x + w_cut == width:
                 continue
-            chars.append(seg_img[y_cut:y + h_cut, x_cut:x + w_cut])
+            chars.append(img[y_cut:y + h_cut, x_cut:x + w_cut])
             X.append(x)
             Y.append(y)
 

@@ -15,6 +15,8 @@ def parse_args():
                     help="path to input directory of images")
     ap.add_argument("-d", "--debug", type=int, default=-1,
                     help="whether or not to show additional visualizations")
+    ap.add_argument('-s', '--segmentation', type=int, default=1,
+                    help='whether or not to use segmentation')
     args = vars(ap.parse_args())
 
     return args
@@ -26,7 +28,7 @@ def main(args):
     seg_anpr = character_segmentation(n_clusters=3, debug=args["debug"] > 0)
 
     # grab all image paths in the input directory
-    imagePaths = sorted(list(paths.list_images(args["input"])))
+    imagePaths = sorted(list(paths.list_images(args["input"])))[:10]
     # loop over all image paths in the input directory
     count = 0
     start = time.time()
@@ -35,31 +37,56 @@ def main(args):
         image = cv2.imread(imagePath)
         image = imutils.resize(image, width=600)
         # apply automatic license plate recognition
-        lpCnt, ROI_list = anpr.find_and_ocr(image)
+        lpCnt, ROI_list = anpr.find_best_result_of_lp(image)
         print('----------------------------------------------')
         print(f'Processing image: {_}')
         if len(lpCnt) == 0:
             print("Can't detect license plate")
+            cv2.putText(image, "Can't detect license plate", (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
             cv2.imshow(f"Output{_}", image)
-            # cv2.waitKey(0)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
             continue
         flag = False
-        for (i, r) in enumerate(ROI_list):
-            char = seg_anpr.segment(r)
-            if len(char) > 2:
-                count += 1
 
-                x, y, w, h = cv2.boundingRect(lpCnt[i])
-                cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                cv2.putText(image, '{}'.format(char.replace('\n', '-')),
-                             (x - 15, y - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 255), 2)
-                cv2.imshow(f"Output_{_}", image)
-                print('Characters detected:\n' + char)
-                flag = True
+        # if segmentation is enabled, use character segmentation to extract characters from license plate
+        if args["segmentation"] == 1:
+            for (i, r) in enumerate(ROI_list):
+                char = seg_anpr.segment(r)
+                if len(char) > 2:
+                    count += 1
 
-        cv2.waitKey(0)
+                    x, y, w, h = cv2.boundingRect(lpCnt[i])
+                    cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                    cv2.putText(image, '{}'.format(char.replace('\n', '-')),
+                                 (x - 15, y - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 255), 2)
+                    cv2.imshow(f"Output_{_}", image)
+                    print('Characters detected:\n' + char)
+                    flag = True
+
+            cv2.waitKey(0)
+
+        # if segmentation is disabled, don't use character segmentation to extract characters from license plate
+        if args["segmentation"] == 0:
+            for (i, r) in enumerate(ROI_list):
+                char = seg_anpr.no_segment(r)
+                if len(char) > 2:
+                    count += 1
+                    x, y, w, h = cv2.boundingRect(lpCnt[i])
+                    cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                    cv2.putText(image, '{}'.format(char.replace('\n', '-')),
+                                (x - 15, y - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 255), 2)
+                    cv2.imshow(f"Output_{_}", image)
+                    print('Characters detected:\n' + char)
+                    flag = True
+            cv2.waitKey(0)
         if flag is False:
             print('No characters detected')
+            cv2.putText(image, "Can't detect license plate", (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.imshow(f"Output_{_}", image)
+            cv2.waitKey(0)
         cv2.destroyAllWindows()
 
     print(f'Total time: {time.time() - start}')

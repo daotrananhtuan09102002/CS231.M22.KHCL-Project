@@ -36,12 +36,15 @@ class character_segmentation:
                 cv2.waitKey(0)
 
     def segment(self, img):
+        # read text from license plate image with segmentation
         self.debug_imshow("Original", img)
         height, width = img.shape
+        # use KMeans to segment image into 3 clusters
         seg_img = KMeans_(img, self.n_clusters)
         area = seg_img.shape[0] * seg_img.shape[1]
         seg_img = seg_img.astype(np.uint8)
         self.debug_imshow("seg_img", seg_img)
+        # binarize image
         ret, thresh = cv2.threshold(seg_img, 100, 255, cv2.THRESH_BINARY)
         blur = cv2.GaussianBlur(thresh, (5, 5), 0)
         im_bw = cv2.Canny(blur, 10, 200)
@@ -61,15 +64,19 @@ class character_segmentation:
         for c in contours:
             (x, y, w, h) = cv2.boundingRect(c)
             # print('Cnt area:', w * h, 'ratio', h / w)
+            # remain only contours with area between MIN_RATIO_AREA and MAX_RATIO_AREA
+            # and ratio between MIN_RATIO and MAX_RATIO
             if MIN_RATIO_AREA * area <= w * h <= MAX_RATIO_AREA * area \
                     and MIN_RATIO <= h / w <= MAX_RATIO:
                 new_contours.append(c)
 
         chars = []
         X, Y = [], []
+        # segment image into characters
         for c in new_contours:
             (x, y, w, h) = cv2.boundingRect(c)
 
+            # padding to help with OCR accuracy
             x_cut = x - 5 if x - 5 > 0 else 0
             y_cut = y - 5 if y - 5 > 0 else 0
             w_cut = w + 5 if x + w + 10 < width else w
@@ -85,23 +92,25 @@ class character_segmentation:
         chars_top = []
         chars_bottom = []
 
+        # divide characters into top and bottom by y-coordinate
         for i, c in enumerate(chars):
             if Y[i] < height / 2 - 30:
                 chars_top.append([c, X[i], Y[i]])
             else:
                 chars_bottom.append([c, X[i], Y[i]])
 
+        # divide top and bottom characters into two groups by x-coordinate
         chars_top = sorted(chars_top, key=lambda x: x[1])
         chars_bottom = sorted(chars_bottom, key=lambda x: x[1])
 
+        #
         if len(chars_top) < 4:
             for i in range(len(chars_top)):
                 h, w = chars_top[i][0].shape[:2]
-                s = reader.recognize(chars_top[i][0], detail=0, allowlist='0123456789ABCDEFGHIJKLMNOPQRSTUVWXZ')
+                s = reader.recognize(chars_top[i][0], detail=0, allowlist='0123456789ABCDEFGHKLMNPRSTUVXYZ')
                 if s is not None and self.debug:
                     cv2.putText(img_BGR, *s, (chars_top[i][1] + 8, chars_top[i][2] + 20), cv2.FONT_HERSHEY_SIMPLEX,
-                                0.75,
-                                (0, 0, 255), 2)
+                                0.75, (0, 0, 255), 2)
                     cv2.rectangle(img_BGR, (chars_top[i][1], chars_top[i][2]),
                                   (chars_top[i][1] + w - 5, chars_top[i][2] + h - 5), (0, 255, 0), 2)
 
@@ -112,14 +121,14 @@ class character_segmentation:
             for i in range(len(chars_top)):
                 h, w = chars_top[i][0].shape[:2]
                 if i == 2:
-                    s = reader.recognize(chars_top[i][0], detail=0, allowlist='ABCDEFGHKLMNPRSTUVXZ')
+                    s = reader.recognize(chars_top[i][0], detail=0, allowlist='ABCDEFGHKLMNPRSTUVXYZ')
                 else:
                     s = reader.recognize(chars_top[i][0], detail=0, allowlist='0123456789')
                 if s is not None and self.debug:
-                    cv2.putText(img_BGR, *s, (chars_top[i][1] + 8, chars_top[i][2] + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
-                               (0, 0, 255), 2)
+                    cv2.putText(img_BGR, *s, (chars_top[i][1] + 8, chars_top[i][2] + 20), cv2.FONT_HERSHEY_SIMPLEX,
+                                0.75, (0, 0, 255), 2)
                     cv2.rectangle(img_BGR, (chars_top[i][1], chars_top[i][2]),
-                                 (chars_top[i][1] + w - 5, chars_top[i][2] + h - 5), (0, 255, 0), 2)
+                                  (chars_top[i][1] + w - 5, chars_top[i][2] + h - 5), (0, 255, 0), 2)
 
                     self.debug_imshow('char', chars_top[i][0], waitKey=True)
 
@@ -130,9 +139,9 @@ class character_segmentation:
             s = reader.recognize(chars_bottom[i][0], detail=0, allowlist='0123456789')
             if s is not None and self.debug:
                 cv2.putText(img_BGR, *s, (chars_bottom[i][1] + 8, chars_bottom[i][2] + 20), cv2.FONT_HERSHEY_SIMPLEX,
-                           0.75, (0, 0, 255), 2)
+                            0.75, (0, 0, 255), 2)
                 cv2.rectangle(img_BGR, (chars_bottom[i][1], chars_bottom[i][2]),
-                             (chars_bottom[i][1] + w - 5, chars_bottom[i][2] + h - 5), (0, 255, 0), 2)
+                              (chars_bottom[i][1] + w - 5, chars_bottom[i][2] + h - 5), (0, 255, 0), 2)
 
                 self.debug_imshow('char', chars_bottom[i][0], waitKey=True)
 
@@ -140,3 +149,15 @@ class character_segmentation:
 
         self.debug_imshow('Result', img_BGR)
         return ''.join(s_top) + '\n' + ''.join(s_bottom)
+
+    def no_segment(self, img):
+        # read text from license plate image without segmentation
+        s = reader.readtext(img, detail=0, allowlist='0123456789ABCDEFGHKLMNPRSTUVXYZ.-')
+        for i in range(len(s)):
+            try:
+                s[i] = s[i].replace('.', '')
+                s[i] = s[i].replace('-', '')
+            except:
+                continue
+
+        return '\n'.join(s)

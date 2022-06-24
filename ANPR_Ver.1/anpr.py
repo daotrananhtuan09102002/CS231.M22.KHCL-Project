@@ -1,4 +1,5 @@
-# import the necessary packages
+# code by: Dao Tran Anh Tuan
+# lưu ý: một số đoạn comment bằng tiếng việt là do chưa tìm được câu từ tiếng anh phù hợp
 import numpy as np
 import imutils
 import cv2
@@ -84,6 +85,12 @@ class PyImageSearchANPR:
 
     def locate_license_plate(self, gray, candidates):
         lpCnt = []
+
+        if self.debug:
+            img_BGR = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+            cnts = cv2.drawContours(img_BGR.copy(), candidates, -1, (0, 255, 0), 2)
+            self.debug_imshow("Candidates", cnts)
+
         for c in candidates:
             # tính toán kích thước của contour
             (x, y, w, h) = cv2.boundingRect(c)
@@ -96,7 +103,7 @@ class PyImageSearchANPR:
 
         return lpCnt
 
-    def find_and_ocr(self, image):
+    def find_best_result_of_lp(self, image):
         # convert the input image to grayscale, locate all candidate
         # license plate regions in the image, and then process the
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)

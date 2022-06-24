@@ -83,7 +83,7 @@ def main(args):
             cv2.waitKey(0)
         if flag is False:
             print('No characters detected')
-            cv2.putText(image, "Can't detect license plate", (10, 30),
+            cv2.putText(image, "Can't recognize character", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
             cv2.imshow(f"Output_{_}", image)
             cv2.waitKey(0)
